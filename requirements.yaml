@@ -1,0 +1,11 @@
+name : aiagent
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - SpeechRecognition
+  - pyttsx3
+  - openai
+  - sounddevice
+  - scipy
