@@ -33,7 +33,7 @@ def stream_response(response, placeholder):
     return streamed_text
 
 
-def handle_chat_response(user_question: str, system_prompt:str, bot_placeholder, temperature, model_name):
+def handle_chat_response(user_question: str, system_prompt:str,bot_placeholder, temperature, model_name,image_url):
     """Process chat responses based on file type"""
     try:
         temperature = float(temperature)
@@ -53,7 +53,19 @@ def handle_chat_response(user_question: str, system_prompt:str, bot_placeholder,
             messages.append({"role": "user", "content": chat["user_message"]})
             messages.append({"role": "assistant", "content": chat["bot_message"]})
             # messages.append({"role": "system", "content": chat["bot_message"]})
-        messages.append({"role": "user", "content": user_question})
+
+        if image_url:
+            # If image is uploaded, send as multimodal input
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_question},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            })
+        else:
+            messages.append({"role": "user", "content": user_question})
+        # messages.append({"role": "user", "content": user_question})
         response = client.chat.completions.create(
             model=model_name,
             messages=messages,
@@ -82,7 +94,7 @@ def run():
     model_names = [
         # "gpt-4-turbo",
         "gpt-4o",
-        "gpt-3.5-turbo-instruct",
+        # "gpt-3.5-turbo-instruct",
         "gpt-4-turbo-preview",  # Updated model name
         "gpt-4",
         "gpt-3.5-turbo",
@@ -108,26 +120,42 @@ def run():
     #                              "gpt-4-turbo")
     selected_model = st.sidebar.selectbox("Select a GPT Model", model_names)
     temperature = st.sidebar.slider(min_value=0.0, max_value=1.0, step=0.1,value=0.7, label="Temperature")
+    uploaded_image = st.file_uploader("Upload an image (JPEG/PNG)", type=["jpg", "jpeg", "png"])
 
+    image_base64 = None
+    image_url = None
+
+    if uploaded_image is not None:
+        # Convert image to base64 format for OpenAI vision input
+        import base64
+        from PIL import Image
+        import io
+
+        image = Image.open(uploaded_image)
+        buffered = io.BytesIO()
+        image.save(buffered, format="PNG")
+        image_bytes = buffered.getvalue()
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+        image_url = f"data:image/png;base64,{image_base64}"
 
     user_input = st.text_area("Enter your query", height=100)
 
     # Update user_input in session state
     st.session_state['user_input'] = user_input
     # user_question = st.text_area("Ask a question", height= 100)
-    if st.button("Reset Chat"):
+    if st.sidebar.button("Reset Chat"):
         if 'user_input' in st.session_state:
             st.session_state.user_input = ""
         st.session_state.conversation_history = []
     for message in st.session_state.conversation_history:
         st.write(user_template.replace("MSG", message['user_message']), unsafe_allow_html=True)
         st.write(bot_template.replace("{{MSG}}", message['bot_message']), unsafe_allow_html=True)
-    if st.button("Submit"):
-        if user_input:  # If input is not empty, call the model
-            # answer = chat_with_gpt(system_prompt, user_question)
-            st.write(user_template.replace("MSG", st.session_state['user_input']), unsafe_allow_html=True)
-            bot_message_placeholder = st.empty()
-            handle_chat_response(st.session_state['user_input'],system_prompt, bot_message_placeholder,temperature,selected_model)
+    # if st.sidebar.button("Submit"):
+    if user_input:  # If input is not empty, call the model
+        # answer = chat_with_gpt(system_prompt, user_question)
+        st.write(user_template.replace("MSG", st.session_state['user_input']), unsafe_allow_html=True)
+        bot_message_placeholder = st.empty()
+        handle_chat_response(st.session_state['user_input'],system_prompt, bot_message_placeholder,temperature,selected_model, image_url)
 
 
 def chat_with_gpt(system_prompt, question, model_name):
